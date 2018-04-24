@@ -191,9 +191,9 @@ rm(sequence)
 
 ```{r}
 
-## T-wave end detection - Trapez area algorithm (V�zquez-Seisdedos et al., 2011) 
+## T-wave end detection - Trapez area algorithm (Vázquez-Seisdedos et al., 2011) 
 
-# To segment the cardiac cycle into systole and diastole, we computed the trial-specific phases based on cardio-mechanical events related to the ECG trace. The ventricular systolic phase (further referred as "systole") was defined as a time between R peak of the QRS complex and the t-wave end, while diastole as the remaining part of the RR interval. The trapez area algorithm was applied to encode the t-wave end in each trial. First, the t-peak was located as a local maximum within the � physiologically plausible � interval after the R peak containing the t-wave. Subsequently, the algorithm computed a series of trapezes along the descending part of the t-wave signal, defining the point at which the trapezium�s area gets maximal as the t-wave end.
+# To segment the cardiac cycle into systole and diastole, we computed the trial-specific phases based on cardio-mechanical events related to the ECG trace. The ventricular systolic phase (further referred as "systole") was defined as a time between R peak of the QRS complex and the t-wave end, while diastole as the remaining part of the RR interval. The trapez area algorithm was applied to encode the t-wave end in each trial. First, the t-peak was located as a local maximum within the  physiologically plausible  interval after the R peak containing the t-wave. Subsequently, the algorithm computed a series of trapezes along the descending part of the t-wave signal, defining the point at which the trapeziums area gets maximal as the t-wave end.
 
 # specify ECG sampling frequency (in Hz)
 fs=1000
@@ -243,15 +243,27 @@ for (s in unique(data$ID)){
       # for the trials after ao_error occurence take the next datapoint from ECG data vectors    
       ecg_i <- ecg_i + 1
     
-      pos[ecg_i]=max(which(R_peaks < stim_onsets[ecg_i]))
+    # calculate the position of R peak that occured just before the stimulus onset
+      pos[ecg_i]=max(which(R_peaks < stim_onsets[ecg_i])) 
+    # calculate the position of R peak that occured just before the stimulus onset in data points in the R_peaks vector
       ecgpos1[ecg_i]=R_peaks[pos[ecg_i]]*fs 
-      RRint[ecg_i]=(R_peaks[pos[ecg_i]+1]-R_peaks[pos[ecg_i]])*fs #in data points
-      ecgpos2[ecg_i]=ecgpos1[ecg_i]+RRint[ecg_i]-150*(fs/2500)
+    # Calculate the duration of RR interval containing the stimulus in data points
+      RRint[ecg_i]=(R_peaks[pos[ecg_i]+1]-R_peaks[pos[ecg_i]])*fs 
+    # Calculate a time interval where the end of t wave would be included (in data points). Cut off fs*(150/2500) data points so that t wave max calculation would not detect the next R peak.    
+      ecgpos2[ecg_i]=ecgpos1[ecg_i]+RRint[ecg_i]-150*(fs/2500) 
+      # create a vector containing all possible data points in the RR interval for visualization purposes. 120 ms or        fs*(300/2500) data points are chosen arbitrarily to include the Rpeaks in the plots.
       twave1=ECG[(ecgpos1[ecg_i]-300*(fs/2500)):ecgpos2[ecg_i]+300*(fs/2500),]
+      
+      # create a vector (twave) where the maximum of t wave could be calculated. After visually observing a block of each participant, it is decided that tmax should occur at least after 350/2500 ms after the R peak. In order to calculate the psoition of tmax, delete (350/2500)*fs data points from the end of RRint vector and search it until the 1/3 of the remaining vector. 1/3 ratio was given to compensate for the variation of trial to trial RR interval durations.
+      
       twave=ECG[(ecgpos1[ecg_i]+350*(fs/2500)):ecgpos2[ecg_i],]
       tmaxpos=which.max(twave[1:((RRint[ecg_i]-350*(fs/2500))/3),2]) 
+      # calculate a snip of t wave which starts with the tmax
       twave2=twave[tmaxpos:dim(twave)[1],]
-      dp=0.12*fs #corrected 7
+      
+      # Determine a point called xm located in the segment after the T peak, which has a minimum value in the first derivative. The algoritm searces for xm in a 120 ms time window startng from tmax. In case twave2 does not contain 0.12*fs data points, it searches only until the last point of twave2.
+      
+      dp=0.12*fs # 0.12 s in data points
       if (dp>dim(twave2)[1]) {
         xm=which(diff(twave2[,2])==min(diff(twave2[,2]))) 
       } else {
@@ -259,11 +271,14 @@ for (s in unique(data$ID)){
       }
       xm=xm[1]
       ym=twave2[xm,2]
+      # determine a point xr which is supposed t happen after tend.
       xr=150+xm 
+      # make a vector starting from xm and goes until xr
       xseq=xm:xr
       yseq=twave2[xm:xr,2]
       
-      #write a function find the end of twave
+      # write a function find the end of twave: first calculation of the trapeziums areas of all the points located between “xm“ and “xr“ and then identification of the point which gives the maximum area and label it as the t-wave end.
+      
       trapez_area <- function(xm, ym, xseq, yseq, xr) {
         a <- numeric()
         for (i in seq_along(xseq)){
@@ -418,7 +433,7 @@ length(data$trial[data$resp_class == "CR"])
 ```{r, fig.width=4, fig.height=4}
 
 ## General information about the Rayleigh Test (Circular Statistics)
-#"Rayleigh Test of Uniformity" assess the significance of the mean resultant length (�R) which is "a measure of the concentration of data points around the circle. If �R is greater than a threshold value, the data are interpreted as being too concentrated to be consistent with uniformity" (Pawsey et al., 2013, s. 81). The alternative hypothesis is a unimodal distribution with unknown mean direction. For more details on using circular statistics in R please see: https://cran.r-project.org/web/packages/circular/circular.pdf
+#"Rayleigh Test of Uniformity" assess the significance of the mean resultant length (R) which is "a measure of the concentration of data points around the circle. If R is greater than a threshold value, the data are interpreted as being too concentrated to be consistent with uniformity" (Pawsey et al., 2013, s. 81). The alternative hypothesis is a unimodal distribution with unknown mean direction. For more details on using circular statistics in R please see: https://cran.r-project.org/web/packages/circular/circular.pdf
 
 # specify a dataframe with the uniformity test results for each participant
 Onset_distribution_ID <- data.frame(ID = integer(0),
